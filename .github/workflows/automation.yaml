@@ -1,0 +1,125 @@
+name: Packer AMI Automation (GitHub Actions)
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  PRODUCT_VERSION: "latest" 
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+jobs:
+  packer-build:
+    name: Run Packer
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout 
+        uses: actions/checkout@v4
+
+      - name: Setup `packer`
+        uses: hashicorp/setup-packer@main
+        id: setup
+        with:
+          version: ${{ env.PRODUCT_VERSION }}
+
+      - name: Run `packer init`
+        id: init
+        run: "packer init ."
+
+      - name: Run `packer fmt`
+        id: fmt
+        run: "packer fmt ."
+
+      - name: Run `packer validate`
+        id: validate
+        run: "packer validate ."
+
+      - name: Run `packer build`
+        id: build
+        run: "packer build ."
+
+      - name: Create artifact directory
+        run: mkdir artifact-dir
+
+      - name: Move packer manifest
+        run: mv packer-manifest.json artifact-dir/
+
+      - name: Save packer manifest as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: packer-manifest
+          path: artifact-dir/packer-manifest.json
+
+      - name: List Files in artifact-dir
+        run: ls -l artifact-dir
+
+  terraform-run:
+    name: Run terraform
+    needs: [packer-build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 
+        uses: actions/checkout@v4
+
+      - name: Download packer manifest
+        uses: actions/download-artifact@v3
+        with:
+          name: packer-manifest
+          path: ./artifact-dir  # Download to artifact-dir
+
+      - name: Setup terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.1.7"
+
+      - name: 'terraform init'
+        run: terraform init
+
+      - name: 'terraform format'
+        run: terraform fmt -recursive
+
+      - name: 'terraform plan' 
+        run: terraform plan
+
+      - name: 'terraform apply'
+        run: terraform apply --auto-approve
+
+  s3-upload:
+    name: Upload manifest to S3
+    needs: [terraform-run]
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write  
+      packages: write
+      actions: write
+    
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout 
+        uses: actions/checkout@v4
+
+      - name: Download packer manifest
+        uses: actions/download-artifact@v3
+        with:
+          name: packer-manifest
+          path: ./artifact-dir  # Download to artifact-dir
+
+      - name: List files in artifact-dir
+        run: ls -l artifact-dir
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Upload to S3
+        run: aws s3 sync artifact-dir s3://${{ secrets.AWS_BUCKET }}
+  
