@@ -1,4 +1,4 @@
-# Workflow to Create an AMI Using Packer (packer-ami-automation)
+# Workflow to Create an AMI Using Packer 
 
 ## Description
 
@@ -58,10 +58,3 @@ The `.gitignore` file ensures that sensitive data and temporary files are not in
 - **Terraform State Files**: Prevents tracking of `.tfstate` and backup files.
 - **Sensitive Files**: Excludes files with sensitive data and secrets.
 - **Temporary Files**: Ignores temporary files created by various tools.
-
-## Usage
-
-1. **Clone the Repository**:
-
-   ```bash
-   git clone https://github.com/yourusername/packer-ami-automation.git
